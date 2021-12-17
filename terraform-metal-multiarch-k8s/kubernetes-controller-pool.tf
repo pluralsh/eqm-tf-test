@@ -32,7 +32,7 @@ resource "metal_reserved_ip_block" "kubernetes" {
   project_id = var.metal_create_project ? metal_project.new_project[0].id : var.project_id
   facility   = var.facility != "" ? var.facility : null
   metro      = var.metro != "" ? var.metro : null
-  quantity   = 4
+  quantity   = 1
 }
 
 module "controllers" {

@@ -1,5 +1,10 @@
 output "controller_addresses" {
-  description = "Kubernetes Controller IP Addresses"
+  description = "Kubernetes API Server IP Addresses"
+  value       = metal_reserved_ip_block.api_server.network
+}
+
+output "primary_master" {
+  description = "Kubernetes Primary Master IP Addresses"
   value       = metal_device.k8s_primary.network.0.address
 }
 

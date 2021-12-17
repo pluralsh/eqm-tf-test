@@ -1,6 +1,10 @@
 module "node_pool_blue" {
   source = "./modules/node_pool"
 
+  depends_on = [
+    module.controllers.primary_master
+  ]
+
   kube_token         = module.kube_token_1.token
   kubernetes_version = var.kubernetes_version
   pool_label         = "blue"
@@ -20,6 +24,10 @@ module "node_pool_blue" {
 
 module "node_pool_gpu_green" {
   source = "./modules/gpu_node_pool"
+
+  depends_on = [
+    module.controllers.primary_master
+  ]
 
   kube_token         = module.kube_token_1.token
   kubernetes_version = var.kubernetes_version

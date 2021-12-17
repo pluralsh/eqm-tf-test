@@ -50,6 +50,9 @@ bootstrapTokens:
 apiVersion: kubeadm.k8s.io/v1beta2
 kind: ClusterConfiguration
 kubernetesVersion: stable
+apiServer:
+  certSANs:
+  - "${control_plane_vip}"
 controlPlaneEndpoint: "$(curl -s http://metadata.platformequinix.com/metadata | jq -r '.network.addresses[] | select(.public == true) | select(.management == true) | select(.address_family == 4) | .address'):6443"
 networking:
   podSubnet: $CNI_CIDR
@@ -57,6 +60,31 @@ certificatesDir: /etc/kubernetes/pki
 EOF
     kubeadm init --config=/etc/kubeadm-config.yaml ; \
     kubeadm init phase upload-certs --upload-certs
+}
+
+function update_cluster_config {
+      export CNI_CIDR="$(cat $HOME/workloads.json | jq .cni_cidr)" && \
+      cat << EOF > /etc/kubeadm-config.yaml
+apiVersion: kubeadm.k8s.io/v1beta1
+kind: InitConfiguration
+bootstrapTokens:
+- token: "${kube_token}"
+  description: "default kubeadm bootstrap token"
+  ttl: "0"
+---
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+kubernetesVersion: stable
+apiServer:
+  certSANs:
+  - "${control_plane_vip}"
+controlPlaneEndpoint: "${control_plane_vip}"
+networking:
+  podSubnet: $CNI_CIDR
+certificatesDir: /etc/kubernetes/pki
+EOF
+    kubeadm upgrade apply -f --config /etc/kubeadm-config.yaml --ignore-preflight-errors all
+    sed -i "s/$(curl -s http://metadata.platformequinix.com/metadata | jq -r '.network.addresses[] | select(.public == true) | select(.management == true) | select(.address_family == 4) | .address')/${control_plane_vip}/g" /etc/kubernetes/admin.conf
 }
 
 function init_cluster {
@@ -111,9 +139,12 @@ function kube_vip {
   kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f https://kube-vip.io/manifests/rbac.yaml
   docker run --network host --rm ghcr.io/kube-vip/kube-vip:v0.4.0 manifest daemonset \
   --interface lo \
+  --vip ${control_plane_vip} \
+  --controlplane \
   --services \
   --bgp \
   --annotations metal.equinix.com \
+  --taint \
   --inCluster | kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f -
 }
 
@@ -253,6 +284,8 @@ metal_lb
 fi
 if [ "${loadbalancer_type}" = "kube-vip" ]; then
 kube_vip
+while ! ping -q -c 1 ${control_plane_vip} >/dev/null ; do sleep 5; done
+update_cluster_config
 fi
 if [ "${count_gpu}" = "0" ]; then
   echo "Skipping GPU enable..."

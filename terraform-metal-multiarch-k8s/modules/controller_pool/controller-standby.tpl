@@ -37,6 +37,11 @@ if [ "${storage}" = "ceph" ]; then
 fi ; \
 enable_docker && \
 install_kube_tools && \
+sleep 30 && \
+if [ "${ccm_enabled}" = "true" ]; then
+  echo KUBELET_EXTRA_ARGS=\"--cloud-provider=external\" > /etc/default/kubelet
+fi
+
 sleep 180 ; \
 backoff_count=`echo $((5 + RANDOM % 100))` ; \
 sleep $backoff_count # Shouldn't there be a kubeadm join command somewhere? Looks like we just install tools and do nothing else

@@ -1,3 +1,10 @@
+resource "metal_reserved_ip_block" "api_server" {
+  project_id = var.project_id
+  facility   = var.facility != "" ? var.facility : null
+  metro      = var.metro != "" ? var.metro : null
+  quantity   = 1
+}
+
 data "template_file" "controller-primary" {
   template = file("${path.module}/controller-primary.tpl")
 
@@ -15,6 +22,7 @@ data "template_file" "controller-primary" {
     skip_workloads           = var.skip_workloads ? "yes" : "no"
     workloads                = jsonencode(var.workloads)
     control_plane_node_count = var.control_plane_node_count
+    control_plane_vip        = metal_reserved_ip_block.api_server.network
     equinix_api_key          = var.auth_token
     equinix_project_id       = var.project_id
     loadbalancer             = local.loadbalancer_config
@@ -28,7 +36,7 @@ data "template_file" "controller-primary" {
 
 resource "metal_device" "k8s_primary" {
   hostname         = "${var.cluster_name}-controller-primary"
-  operating_system = "ubuntu_18_04"
+  operating_system = "ubuntu_20_04"
   plan             = var.plan_primary
   facilities       = var.facility != "" ? [var.facility] : null
   metro            = var.metro != "" ? var.metro : null
@@ -44,9 +52,10 @@ data "template_file" "controller-standby" {
 
   vars = {
     kube_token      = var.kube_token
-    primary_node_ip = metal_device.k8s_primary.network.0.address
+    #primary_node_ip = var.control_plane_vip != "" ? var.control_plane_vip : metal_device.k8s_primary.network.0.address
     kube_version    = var.kubernetes_version
     storage         = var.storage
+    ccm_enabled     = var.ccm_enabled
   }
 }
 
@@ -55,7 +64,7 @@ resource "metal_device" "k8s_controller_standby" {
   depends_on = [metal_device.k8s_primary]
 
   hostname         = format("${var.cluster_name}-controller-standby-%02d", count.index)
-  operating_system = "ubuntu_18_04"
+  operating_system = "ubuntu_20_04"
   plan             = var.plan_primary
   facilities       = var.facility != "" ? [var.facility] : null
   metro            = var.metro != "" ? var.metro : null
@@ -97,7 +106,7 @@ resource "null_resource" "key_wait_transfer" {
     type        = "ssh"
     user        = "root"
     host        = metal_device.k8s_controller_standby[count.index].access_public_ipv4
-    private_key = var.ssh_private_key_path
+    private_key = file(var.ssh_private_key_path)
     password    = metal_device.k8s_controller_standby[count.index].root_password
   }
 
@@ -108,6 +117,7 @@ resource "null_resource" "key_wait_transfer" {
   provisioner "local-exec" {
     environment = {
       controller           = metal_device.k8s_primary.network.0.address
+      control_plane_vip    = metal_reserved_ip_block.api_server.network
       node_addr            = metal_device.k8s_controller_standby[count.index].access_public_ipv4
       kube_token           = var.kube_token
       ssh_private_key_path = var.ssh_private_key_path

@@ -12,7 +12,7 @@ data "template_file" "node" {
 
 resource "metal_device" "x86_node" {
   hostname         = format("${var.cluster_name}-x86-${var.pool_label}-%02d", count.index)
-  operating_system = "ubuntu_18_04"
+  operating_system = "ubuntu_20_04"
   count            = var.count_x86
   plan             = var.plan_x86
   facilities       = var.facility != "" ? [var.facility] : null
@@ -26,7 +26,7 @@ resource "metal_device" "x86_node" {
 
 resource "metal_device" "arm_node" {
   hostname         = format("${var.cluster_name}-arm-${var.pool_label}-%02d", count.index)
-  operating_system = "ubuntu_18_04"
+  operating_system = "ubuntu_20_04"
   count            = var.count_arm
   plan             = var.plan_arm
   facilities       = var.facility != "" ? [var.facility] : null
